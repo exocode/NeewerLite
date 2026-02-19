@@ -44,7 +44,27 @@ Here is a video I made to demo the scene:
 
 ## Script Usage
 
-Open the app and let it scans all Neewer lights through Bluetooth. Once it finds lights. Then you could use command to switch On/Off lights.
+Open the app and let it scan all Neewer lights through Bluetooth. Once it finds lights, you can use URL scheme commands to control them.
+
+### Lampen-Identifikation
+
+Der `light` Parameter unterstützt drei Arten von Identifikatoren:
+
+| Identifikator | Beschreibung | Beispiel |
+|---------------|--------------|----------|
+| **userLightName** | Der benutzerdefinierte Name der Lampe (in der App festgelegt) | `light=Front` |
+| **rawName** | Der ursprüngliche Bluetooth-Name der Lampe | `light=NEEWER-SL90-PRO` |
+| **identifier** | Die UUID der Lampe | `light=A1B2C3D4-E5F6-...` |
+
+### Wildcard- und Pattern-Support
+
+Sie können mehrere Lampen gleichzeitig steuern:
+
+- **Kommagetrennte Liste**: `light=Front,Back,Side` - Steuert mehrere Lampen
+- **Wildcard-Pattern**: `light=Front*` - Steuert alle Lampen, die mit "Front" beginnen
+- **Kombinationen**: `light=Front*,Back,NEEWER-*` - Kombiniert verschiedene Patterns
+
+### Grundlegende Befehle
 
 Turn on all lights:
 
@@ -70,6 +90,40 @@ Scan all lights:
 open "neewerlite://scanLight"
 ```
 
+List all lights (wird im Log angezeigt):
+
+```bash
+open "neewerlite://listLights"
+```
+
+### Spezifische Lampen steuern
+
+Turn on light by name:
+
+```bash
+open "neewerlite://turnOnLight?light=Front"
+```
+
+Turn off light by raw name:
+
+```bash
+neewerlite://turnOffLight?light=NEEWER-SL90-PRO"
+```
+
+Multiple lights with comma separation:
+
+```bash
+open "neewerlite://turnOnLight?light=Front,Back,Side"
+```
+
+Wildcard pattern for multiple lights:
+
+```bash
+open "neewerlite://turnOnLight?light=NEEWER-*"
+```
+
+### Farbtemperatur (CCT) steuern
+
 Set lights CCT:
 
 ```bash
@@ -82,9 +136,23 @@ Set lights CCT+GM:
 open "neewerlite://setLightCCT?CCT=3200&GM=-50&Brightness=100"
 ```
 
-Most of light model support CCT range 3200K to 5600K, Some lights support long CCT range 3200K to 8500K. And some newer model of light support GM.
+Set CCT for specific light:
 
-Set lights Hue and Saturation and Brightness:
+```bash
+open "neewerlite://setLightCCT?light=Front&CCT=3200&GM=-50&Brightness=100"
+```
+
+Nur Farbtemperatur ändern (ohne Helligkeit):
+
+```bash
+open "neewerlite://setTemperature?light=Front&CCT=4500"
+```
+
+Most light models support CCT range 3200K to 5600K. Some lights support extended CCT range 3200K to 8500K. Newer models also support GM (Green/Magenta shift).
+
+### HSI / RGB steuern
+
+Set lights Hue, Saturation and Brightness:
 
 ```bash
 open "neewerlite://setLightHSI?RGB=ff00ff&Saturation=100&Brightness=100"
@@ -93,6 +161,34 @@ open "neewerlite://setLightHSI?RGB=ff00ff&Saturation=100&Brightness=100"
 ```bash
 open "neewerlite://setLightHSI?HUE=360&Saturation=100&Brightness=100"
 ```
+
+Set HSI for specific light:
+
+```bash
+open "neewerlite://setLightHSI?light=Front&HUE=180&Saturation=100&Brightness=50"
+```
+
+Nur Hue ändern:
+
+```bash
+open "neewerlite://setHue?light=Front&HUE=180"
+```
+
+Nur Sättigung ändern:
+
+```bash
+open "neewerlite://setSaturation?light=Front&Saturation=80"
+```
+
+### Helligkeit steuern
+
+Nur Helligkeit ändern:
+
+```bash
+open "neewerlite://setBrightness?light=Front&Brightness=75"
+```
+
+### Szenen steuern
 
 Set lights to scene:
 
@@ -106,19 +202,21 @@ open "neewerlite://setLightScene?SceneId=1&Brightness=100"
 
 Scene Names: SquadCar, Ambulance, FireEngine, Fireworks, Party, CandleLight, Lighting, Paparazzi, Screen
 
-Not all model follow these scene names. If your light support more scenes, you can use SceneId to switch.
+Not all models follow these scene names. If your light supports more scenes, you can use SceneId to switch.
 
 SceneId Range from 1 ~ 17 depends on light type.
 
-Turn on light by name:
+### Fehlerbehandlung
 
-```bash
-open "neewerlite://turnOnLight?light=left"
-```
+Die URL-Scheme API bietet Logging für:
 
-The 'left' is the name I give one of my light. You could change your light's name in the app and use it in this command.
+- Erfolgreiche Ausführungen (im App-Log sichtbar)
+- Fehler wenn eine Lampe nicht gefunden wird
+- Fehler bei ungültigen Parametern
 
-Another way to test these commands is to copy a command(the string in the double quote) into your browser address bar, and press enter.
+### Testing
+
+Another way to test these commands is to copy a command (the string in the double quote) into your browser address bar, and press enter.
 
 ## Using the Elgato Stream Deck
 

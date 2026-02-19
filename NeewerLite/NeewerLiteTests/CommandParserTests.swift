@@ -234,3 +234,254 @@ final class CommandPatternParserTests: XCTestCase {
         XCTAssertTrue(error?.contains("does not start with 0x") ?? false)
     }
 }
+
+// MARK: - CommandParameter Tests
+
+final class CommandParameterTests: XCTestCase {
+
+    // MARK: - lightNames() Tests
+
+    func testLightNamesCommaSeparated() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front,Back,Side")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), ["Front", "Back", "Side"], "Sollte Komma-separierte Liste in Array umwandeln")
+    }
+
+    func testLightNamesSingleValue() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), ["Front"], "Sollte einzelnen Namen als Array zurückgeben")
+    }
+
+    func testLightNamesEmptyParameter() {
+        let url = URL(string: "neewerlite://turnOnLight?light=")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), [], "Sollte leeres Array zurückgeben wenn Parameter leer ist")
+    }
+
+    func testLightNamesMissingParameter() {
+        let url = URL(string: "neewerlite://turnOnLight")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), [], "Sollte leeres Array zurückgeben wenn Parameter fehlt")
+    }
+
+    func testLightNamesWithSpaces() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front%20Light,Back%20Light")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), ["Front Light", "Back Light"], "Sollte URL-kodierte Leerzeichen korrekt behandeln")
+    }
+
+    // MARK: - hasWildcardPattern() Tests
+
+    func testWildcardPatternWithAsterisk() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER-*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertTrue(param.hasWildcardPattern(), "Sollte Wildcard-Muster erkennen wenn * vorhanden")
+    }
+
+    func testWildcardPatternWithoutAsterisk() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertFalse(param.hasWildcardPattern(), "Sollte false zurückgeben wenn kein * vorhanden")
+    }
+
+    func testWildcardPatternMissingParameter() {
+        let url = URL(string: "neewerlite://turnOnLight")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertFalse(param.hasWildcardPattern(), "Sollte false zurückgeben wenn Parameter fehlt")
+    }
+
+    func testWildcardPatternWithAsteriskInMiddle() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER*Light")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertTrue(param.hasWildcardPattern(), "Sollte * in der Mitte erkennen")
+    }
+
+    // MARK: - wildcardPrefix() Tests
+
+    func testWildcardPrefixExtraction() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER-*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefix(), "neewer-", "Sollte Präfix ohne * extrahieren und kleingeschrieben zurückgeben")
+    }
+
+    func testWildcardPrefixNoAsterisk() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertNil(param.wildcardPrefix(), "Sollte nil zurückgeben wenn kein * am Ende")
+    }
+
+    func testWildcardPrefixOnlyAsterisk() {
+        let url = URL(string: "neewerlite://turnOnLight?light=*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefix(), "", "Sollte leeren String zurückgeben wenn nur *")
+    }
+
+    func testWildcardPrefixMissingParameter() {
+        let url = URL(string: "neewerlite://turnOnLight")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertNil(param.wildcardPrefix(), "Sollte nil zurückgeben wenn Parameter fehlt")
+    }
+
+    // MARK: - wildcardPrefixes() Tests
+
+    func testWildcardPrefixesMultipleWildcards() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER-*,Back-*,Front")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefixes(), ["neewer-", "back-"], "Sollte alle Wildcard-Präfixe extrahieren")
+    }
+
+    func testWildcardPrefixesSingleWildcard() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER-*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefixes(), ["neewer-"], "Sollte einzelnen Wildcard-Präfix extrahieren")
+    }
+
+    func testWildcardPrefixesNoWildcards() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front,Back,Side")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefixes(), [], "Sollte leeres Array zurückgeben wenn keine Wildcards")
+    }
+
+    func testWildcardPrefixesMissingParameter() {
+        let url = URL(string: "neewerlite://turnOnLight")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.wildcardPrefixes(), [], "Sollte leeres Array zurückgeben wenn Parameter fehlt")
+    }
+
+    // MARK: - exactLightNames() Tests
+
+    func testExactLightNamesNoWildcards() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front,Back,Side")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.exactLightNames(), ["Front", "Back", "Side"], "Sollte alle Namen zurückgeben wenn keine Wildcards")
+    }
+
+    func testExactLightNamesMixedList() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front,NEEWER-*,Back")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.exactLightNames(), ["Front", "Back"], "Sollte nur exakte Namen ohne Wildcard zurückgeben")
+    }
+
+    func testExactLightNamesOnlyWildcards() {
+        let url = URL(string: "neewerlite://turnOnLight?light=NEEWER-*,Back-*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.exactLightNames(), [], "Sollte leeres Array zurückgeben wenn nur Wildcards")
+    }
+
+    func testExactLightNamesMissingParameter() {
+        let url = URL(string: "neewerlite://turnOnLight")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.exactLightNames(), [], "Sollte leeres Array zurückgeben wenn Parameter fehlt")
+    }
+
+    // MARK: - Combined Tests
+
+    func testMixedLightNamesFullScenario() {
+        let url = URL(string: "neewerlite://turnOnLight?light=Front,NEEWER-*,Back,Side-*")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+
+        XCTAssertEqual(param.lightNames(), ["Front", "NEEWER-*", "Back", "Side-*"], "Sollte alle Namen parsen")
+        XCTAssertTrue(param.hasWildcardPattern(), "Sollte Wildcard-Muster erkennen")
+        XCTAssertEqual(param.exactLightNames(), ["Front", "Back"], "Sollte exakte Namen extrahieren")
+        XCTAssertEqual(param.wildcardPrefixes(), ["neewer-", "side-"], "Sollte Wildcard-Präfixe extrahieren")
+    }
+}
+
+// MARK: - CommandType Tests
+
+final class CommandTypeTests: XCTestCase {
+
+    func testSetBrightnessCommand() {
+        XCTAssertEqual(CommandType.setBrightness.description, "setBrightness", "setBrightness description sollte korrekt sein")
+    }
+
+    func testSetTemperatureCommand() {
+        XCTAssertEqual(CommandType.setTemperature.description, "setTemperature", "setTemperature description sollte korrekt sein")
+    }
+
+    func testSetHueCommand() {
+        XCTAssertEqual(CommandType.setHue.description, "setHue", "setHue description sollte korrekt sein")
+    }
+
+    func testSetSaturationCommand() {
+        XCTAssertEqual(CommandType.setSaturation.description, "setSaturation", "setSaturation description sollte korrekt sein")
+    }
+
+    func testListLightsCommand() {
+        XCTAssertEqual(CommandType.listLights.description, "listLights", "listLights description sollte korrekt sein")
+    }
+
+    // MARK: - Existing CommandType Tests
+
+    func testTurnOnLightCommand() {
+        XCTAssertEqual(CommandType.turnOnLight.description, "turnOnLight", "turnOnLight description sollte korrekt sein")
+    }
+
+    func testTurnOffLightCommand() {
+        XCTAssertEqual(CommandType.turnOffLight.description, "turnOffLight", "turnOffLight description sollte korrekt sein")
+    }
+
+    func testToggleLightCommand() {
+        XCTAssertEqual(CommandType.toggleLight.description, "toggleLight", "toggleLight description sollte korrekt sein")
+    }
+
+    func testScanLightCommand() {
+        XCTAssertEqual(CommandType.scanLight.description, "scanLight", "scanLight description sollte korrekt sein")
+    }
+
+    func testSetLightHSICommand() {
+        XCTAssertEqual(CommandType.setLightHSI.description, "setLightHSI", "setLightHSI description sollte korrekt sein")
+    }
+
+    func testSetLightCCTCommand() {
+        XCTAssertEqual(CommandType.setLightCCT.description, "setLightCCT", "setLightCCT description sollte korrekt sein")
+    }
+
+    func testSetLightSceneCommand() {
+        XCTAssertEqual(CommandType.setLightScene.description, "setLightScene", "setLightScene description sollte korrekt sein")
+    }
+}

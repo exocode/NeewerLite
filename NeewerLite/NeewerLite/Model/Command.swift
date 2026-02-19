@@ -19,6 +19,11 @@ enum CommandType {
     case setLightHSI
     case setLightCCT
     case setLightScene
+    case setBrightness
+    case setTemperature
+    case setHue
+    case setSaturation
+    case listLights
 
     var description: String {
         switch self {
@@ -36,6 +41,16 @@ enum CommandType {
                 return "setLightCCT"
             case .setLightScene:
                 return "setLightScene"
+            case .setBrightness:
+                return "setBrightness"
+            case .setTemperature:
+                return "setTemperature"
+            case .setHue:
+                return "setHue"
+            case .setSaturation:
+                return "setSaturation"
+            case .listLights:
+                return "listLights"
         }
     }
 }
@@ -43,9 +58,42 @@ enum CommandType {
 struct CommandParameter {
     var components: URLComponents = URLComponents()
 
+    /// Returns the raw light parameter value from the URL
     func lightName() -> String? {
         let lightname = components.queryItems?.first(where: { $0.name == "light" })?.value
         return lightname
+    }
+
+    /// Returns an array of light identifiers parsed from comma-separated list
+    /// Supports: "Front,Back,Side" -> ["Front", "Back", "Side"]
+    func lightNames() -> [String] {
+        guard let lightname = lightName() else { return [] }
+        return lightname.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// Checks if the light parameter contains a wildcard pattern (ends with *)
+    func hasWildcardPattern() -> Bool {
+        guard let lightname = lightName() else { return false }
+        return lightname.contains("*")
+    }
+
+    /// Returns the wildcard prefix for pattern matching
+    /// e.g., "Front*" returns "Front"
+    func wildcardPrefix() -> String? {
+        guard let lightname = lightName(), lightname.hasSuffix("*") else { return nil }
+        return String(lightname.dropLast()).lowercased()
+    }
+
+    /// Parses wildcard patterns and returns all matching prefixes
+    /// Supports: "Front*" or "Front*,Back*"
+    func wildcardPrefixes() -> [String] {
+        let names = lightNames()
+        return names.filter { $0.hasSuffix("*") }.map { String($0.dropLast()).lowercased() }
+    }
+
+    /// Returns non-wildcard light names (exact matches)
+    func exactLightNames() -> [String] {
+        return lightNames().filter { !$0.hasSuffix("*") }
     }
 
     func RGB() -> NSColor? {

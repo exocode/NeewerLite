@@ -95,6 +95,66 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         }
     }
 
+    // MARK: - Light Matching Helper Methods
+
+    /// Matches a lightId against userLightName, rawName, or identifier (case-insensitive)
+    private func matchesLight(viewObj: DeviceViewObject, lightId: String) -> Bool {
+        let lower = lightId.lowercased()
+        return viewObj.device.userLightName.value.lowercased() == lower
+            || viewObj.device.rawName.lowercased() == lower
+            || viewObj.deviceIdentifier.lowercased() == lower
+    }
+
+    /// Matches a light against multiple wildcard prefixes
+    private func matchesWildcard(viewObj: DeviceViewObject, prefixes: [String]) -> Bool {
+        let userName = viewObj.device.userLightName.value.lowercased()
+        let rawName = viewObj.device.rawName.lowercased()
+        let identifier = viewObj.deviceIdentifier.lowercased()
+
+        for prefix in prefixes {
+            if userName.hasPrefix(prefix) || rawName.hasPrefix(prefix) || identifier.hasPrefix(prefix) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Finds matching lights based on CommandParameter with support for:
+    /// - Exact matches (userLightName, rawName, identifier)
+    /// - Comma-separated list: "Front,Back,Side"
+    /// - Wildcard patterns: "Front*"
+    /// - Combined: "Front*,Back,NEEWER-*"
+    private func findMatchingLights(cmdParameter: CommandParameter) -> [DeviceViewObject] {
+        // If no light parameter specified, return all lights
+        guard cmdParameter.lightName() != nil else {
+            return viewObjects
+        }
+
+        var matchedLights: [DeviceViewObject] = []
+        let exactNames = cmdParameter.exactLightNames()
+        let wildcardPrefixes = cmdParameter.wildcardPrefixes()
+
+        for viewObj in viewObjects {
+            var matched = false
+
+            // Check exact matches
+            for name in exactNames {
+                if matchesLight(viewObj: viewObj, lightId: name) {
+                    matchedLights.append(viewObj)
+                    matched = true
+                    break
+                }
+            }
+
+            // Check wildcard matches (if not already matched)
+            if !matched && matchesWildcard(viewObj: viewObj, prefixes: wildcardPrefixes) {
+                matchedLights.append(viewObj)
+            }
+        }
+
+        return matchedLights
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
 
         Logger.initialize()
@@ -370,16 +430,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
             command: Command(
                 type: .turnOnLight,
                 action: { cmdParameter in
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                $0.turnOnLight()
-                            }
-                        }
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("turnOnLight: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { $0.turnOnLight() }
+                        Logger.info("turnOnLight: Turning on \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Logger.debug("  - Turning on: \(viewObj.device.userLightName.value) (\(viewObj.device.rawName))")
+                            viewObj.turnOnLight()
+                        }
                     }
                     self.statusItemIcon = .on
                 }))
@@ -388,16 +447,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
             command: Command(
                 type: .turnOffLight,
                 action: { cmdParameter in
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                $0.turnOffLight()
-                            }
-                        }
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("turnOffLight: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { $0.turnOffLight() }
+                        Logger.info("turnOffLight: Turning off \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Logger.debug("  - Turning off: \(viewObj.device.userLightName.value) (\(viewObj.device.rawName))")
+                            viewObj.turnOffLight()
+                        }
                     }
                     self.statusItemIcon = .on
                 }))
@@ -406,16 +464,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
             command: Command(
                 type: .toggleLight,
                 action: { cmdParameter in
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                $0.toggleLight()
-                            }
-                        }
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("toggleLight: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { $0.toggleLight() }
+                        Logger.info("toggleLight: Toggling \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Logger.debug("  - Toggling: \(viewObj.device.userLightName.value) (\(viewObj.device.rawName))")
+                            viewObj.toggleLight()
+                        }
                     }
                     self.statusItemIcon = .off
                 }))
@@ -427,25 +484,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                     let cct = cmdParameter.CCT()
                     let brr = cmdParameter.brightness()
                     let gmm = cmdParameter.GMM()
-                    func act(_ viewObj: DeviceViewObject) {
-                        if viewObj.isON {
-                            Task { @MainActor in
-                                viewObj.changeToCCTMode()
-                                viewObj.updateCCT(cct, gmm, brr)
-                            }
-                        }
-                    }
-
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                act($0)
-                            }
-                        }
+                    
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setLightCCT: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { act($0) }
+                        Logger.info("setLightCCT: Setting CCT=\(cct), brightness=\(brr ?? 100), GM=\(gmm) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            if viewObj.isON {
+                                Logger.debug("  - Setting CCT: \(viewObj.device.userLightName.value)")
+                                Task { @MainActor in
+                                    viewObj.changeToCCTMode()
+                                    viewObj.updateCCT(cct, gmm, brr)
+                                }
+                            }
+                        }
                     }
                     self.statusItemIcon = .on
                 }))
@@ -460,42 +513,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                     } else if let hue = cmdParameter.HUE() {
                         hueVal = CGFloat(hue)
                     } else {
+                        Logger.error("setLightHSI: No HUE or RGB parameter provided")
                         return
                     }
                     let sat = cmdParameter.saturation()
                     let brr = cmdParameter.brightness()
-                    func act(_ viewObj: DeviceViewObject, showAlert: Bool) {
-                        if viewObj.isON {
-                            if viewObj.device.supportRGB {
-                                Task { @MainActor in
-                                    viewObj.changeToHSIMode()
-                                    viewObj.updateHSI(hue: hueVal, sat: sat, brr: brr)
-                                }
-                            } else {
-                                if showAlert {
-                                    Task { @MainActor in
-                                        let alert = NSAlert()
-                                        alert.messageText = "This light does not support RGB"
-                                        alert.informativeText = "\(viewObj.device.nickName)"
-                                        alert.alertStyle = .informational
-                                        alert.addButton(withTitle: "OK")
-                                        alert.runModal()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                act($0, showAlert: true)
-                            }
-                        }
+                    
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setLightHSI: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { act($0, showAlert: false) }
+                        Logger.info("setLightHSI: Setting HUE=\(hueVal), saturation=\(sat), brightness=\(brr ?? 100) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            if viewObj.isON {
+                                if viewObj.device.supportRGB {
+                                    Logger.debug("  - Setting HSI: \(viewObj.device.userLightName.value)")
+                                    Task { @MainActor in
+                                        viewObj.changeToHSIMode()
+                                        viewObj.updateHSI(hue: hueVal, sat: sat, brr: brr)
+                                    }
+                                } else {
+                                    Logger.warn("  - Light does not support RGB: \(viewObj.device.userLightName.value)")
+                                }
+                            }
+                        }
                     }
                     self.statusItemIcon = .on
                 }))
@@ -507,40 +548,171 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                     let sceneId = cmdParameter.sceneId() ?? cmdParameter.scene()
                     let brr = cmdParameter.brightness()
 
-                    func act(_ viewObj: DeviceViewObject, showAlert: Bool) {
-                        if viewObj.isON {
-                            if viewObj.device.supportRGB {
-                                Task { @MainActor in
-                                    viewObj.changeToSCEMode()
-                                    viewObj.changeToSCE(sceneId, brr)
-                                }
-                            } else {
-                                if showAlert {
-                                    Task { @MainActor in
-                                        let alert = NSAlert()
-                                        alert.messageText = "This light does not support RGB"
-                                        alert.informativeText = "\(viewObj.device.nickName)"
-                                        alert.alertStyle = .informational
-                                        alert.addButton(withTitle: "OK")
-                                        alert.runModal()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if let lightname = cmdParameter.lightName() {
-                        self.viewObjects.forEach {
-                            if lightname.caseInsensitiveCompare($0.device.userLightName.value)
-                                == .orderedSame
-                            {
-                                act($0, showAlert: true)
-                            }
-                        }
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setLightScene: No lights found for '\(cmdParameter.lightName() ?? "all")'")
                     } else {
-                        self.viewObjects.forEach { act($0, showAlert: false) }
+                        Logger.info("setLightScene: Setting scene=\(sceneId), brightness=\(brr ?? 100) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            if viewObj.isON {
+                                if viewObj.device.supportRGB {
+                                    Logger.debug("  - Setting scene: \(viewObj.device.userLightName.value)")
+                                    Task { @MainActor in
+                                        viewObj.changeToSCEMode()
+                                        viewObj.changeToSCE(sceneId, brr)
+                                    }
+                                } else {
+                                    Logger.warn("  - Light does not support RGB: \(viewObj.device.userLightName.value)")
+                                }
+                            }
+                        }
                     }
                     self.statusItemIcon = .on
+                }))
+
+        // MARK: - New Command Handlers
+
+        commandHandler.register(
+            command: Command(
+                type: .setBrightness,
+                action: { cmdParameter in
+                    guard let brr = cmdParameter.brightness() else {
+                        Logger.error("setBrightness: No brightness parameter provided")
+                        return
+                    }
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setBrightness: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("setBrightness: Setting brightness=\(brr) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Logger.debug("  - Setting brightness: \(viewObj.device.userLightName.value)")
+                            Task { @MainActor in
+                                viewObj.device.setBRR100LightValues(CGFloat(brr))
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .setTemperature,
+                action: { cmdParameter in
+                    let cct = cmdParameter.CCT()
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setTemperature: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("setTemperature: Setting temperature=\(cct) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Logger.debug("  - Setting temperature: \(viewObj.device.userLightName.value)")
+                            Task { @MainActor in
+                                viewObj.device.setCCTLightValues(
+                                    brr: CGFloat(viewObj.device.brrValue.value),
+                                    cct: CGFloat(cct),
+                                    gmm: CGFloat(viewObj.device.gmmValue.value)
+                                )
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .setHue,
+                action: { cmdParameter in
+                    guard let hue = cmdParameter.HUE() else {
+                        Logger.error("setHue: No HUE parameter provided")
+                        return
+                    }
+                    let hueVal = CGFloat(hue)
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setHue: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("setHue: Setting hue=\(hueVal) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            if viewObj.device.supportRGB {
+                                Logger.debug("  - Setting hue: \(viewObj.device.userLightName.value)")
+                                Task { @MainActor in
+                                    viewObj.changeToHSIMode()
+                                    viewObj.updateHSI(
+                                        hue: hueVal,
+                                        sat: CGFloat(viewObj.device.satValue.value),
+                                        brr: CGFloat(viewObj.device.brrValue.value)
+                                    )
+                                }
+                            } else {
+                                Logger.warn("  - Light does not support RGB: \(viewObj.device.userLightName.value)")
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .setSaturation,
+                action: { cmdParameter in
+                    let sat = cmdParameter.saturation()
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("setSaturation: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("setSaturation: Setting saturation=\(sat) for \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            if viewObj.device.supportRGB {
+                                Logger.debug("  - Setting saturation: \(viewObj.device.userLightName.value)")
+                                Task { @MainActor in
+                                    viewObj.changeToHSIMode()
+                                    viewObj.updateHSI(
+                                        hue: CGFloat(viewObj.device.hueValue.value),
+                                        sat: CGFloat(sat),
+                                        brr: CGFloat(viewObj.device.brrValue.value)
+                                    )
+                                }
+                            } else {
+                                Logger.warn("  - Light does not support RGB: \(viewObj.device.userLightName.value)")
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .listLights,
+                action: { _ in
+                    Logger.info("listLights: Listing all lights (\(self.viewObjects.count) total)")
+                    var lights: [[String: Any]] = []
+                    self.viewObjects.forEach { viewObj in
+                        let name = viewObj.device.userLightName.value.isEmpty ? viewObj.device.rawName : viewObj.device.userLightName.value
+                        var item: [String: Any] = [
+                            "id": viewObj.deviceIdentifier,
+                            "name": name,
+                            "rawName": viewObj.device.rawName,
+                            "userLightName": viewObj.device.userLightName.value,
+                            "brightness": viewObj.device.brrValue.value,
+                            "temperature": viewObj.device.cctValue.value,
+                            "supportRGB": viewObj.device.supportRGB
+                        ]
+                        if !viewObj.deviceConnected {
+                            item["state"] = -1
+                        } else if viewObj.isON {
+                            item["state"] = 1
+                        } else {
+                            item["state"] = 0
+                        }
+                        lights.append(item)
+                        Logger.info("  - \(name) (rawName: \(viewObj.device.rawName), id: \(viewObj.deviceIdentifier)): brightness=\(viewObj.device.brrValue.value), state=\(item["state"] ?? 0)")
+                    }
+                    // Also log as JSON for easier parsing
+                    if let jsonData = try? JSONSerialization.data(withJSONObject: lights, options: .prettyPrinted),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        Logger.debug("listLights JSON:\n\(jsonString)")
+                    }
                 }))
     }
 
@@ -981,6 +1153,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                 self.updateUI()
             }
         }
+    }
+
+    func clearLogMonitorReferences() {
+        // Placeholder for LogMonitorViewController cleanup when it gets added to the project
     }
 
 }
