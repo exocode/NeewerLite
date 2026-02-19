@@ -32,6 +32,7 @@ Here is a video I made to demo the scene:
 - Correlated color temperature control
 - RGB color control
 - Scene control
+- Control specific lights
 - Script support
 - Sync RGB lights with music
 
@@ -50,21 +51,21 @@ Open the app and let it scan all Neewer lights through Bluetooth. Once it finds 
 
 Der `light` Parameter unterstützt drei Arten von Identifikatoren:
 
-| Identifikator | Beschreibung | Beispiel |
+| Identifier | Description | Example |
 |---------------|--------------|----------|
-| **userLightName** | Der benutzerdefinierte Name der Lampe (in der App festgelegt) | `light=Front` |
-| **rawName** | Der ursprüngliche Bluetooth-Name der Lampe | `light=NEEWER-SL90-PRO` |
-| **identifier** | Die UUID der Lampe | `light=A1B2C3D4-E5F6-...` |
+| **userLightName** | The custom name of the lamp (set in the app) | `light=Front` |
+| **rawName** | The original Bluetooth name of the lamp | `light=NEEWER-SL90-PRO` |
+| **identifier** | The UUID of the lamp | `light=A1B2C3D4-E5F6-...` |
 
-### Wildcard- und Pattern-Support
+### Wildcard- and Pattern-Support
 
-Sie können mehrere Lampen gleichzeitig steuern:
+You can control several lamps simultaneously:
 
-- **Kommagetrennte Liste**: `light=Front,Back,Side` - Steuert mehrere Lampen
-- **Wildcard-Pattern**: `light=Front*` - Steuert alle Lampen, die mit "Front" beginnen
-- **Kombinationen**: `light=Front*,Back,NEEWER-*` - Kombiniert verschiedene Patterns
+- **Comma-separated list**: `light=Front,Back,Side` - Controls multiple lamps
+- **Wildcard-Pattern**: `light=Front*` - Controls all lamps that begin with "Front"
+- **The combinations**: `light=Front*,Back,NEEWER-*` - Combines different patterns
 
-### Grundlegende Befehle
+### Basic commands
 
 Turn on all lights:
 
@@ -96,7 +97,7 @@ List all lights (wird im Log angezeigt):
 open "neewerlite://listLights"
 ```
 
-### Spezifische Lampen steuern
+### Control specific lights
 
 Turn on light by name:
 
@@ -122,7 +123,7 @@ Wildcard pattern for multiple lights:
 open "neewerlite://turnOnLight?light=NEEWER-*"
 ```
 
-### Farbtemperatur (CCT) steuern
+### Control Colortemperature (CCT)
 
 Set lights CCT:
 
@@ -142,7 +143,7 @@ Set CCT for specific light:
 open "neewerlite://setLightCCT?light=Front&CCT=3200&GM=-50&Brightness=100"
 ```
 
-Nur Farbtemperatur ändern (ohne Helligkeit):
+Change colour temperature only (without brightness):
 
 ```bash
 open "neewerlite://setTemperature?light=Front&CCT=4500"
@@ -168,27 +169,27 @@ Set HSI for specific light:
 open "neewerlite://setLightHSI?light=Front&HUE=180&Saturation=100&Brightness=50"
 ```
 
-Nur Hue ändern:
+Change hue only:
 
 ```bash
 open "neewerlite://setHue?light=Front&HUE=180"
 ```
 
-Nur Sättigung ändern:
+Change saturation only:
 
 ```bash
 open "neewerlite://setSaturation?light=Front&Saturation=80"
 ```
 
-### Helligkeit steuern
+### Control brightness
 
-Nur Helligkeit ändern:
+Change brightness only:
 
 ```bash
 open "neewerlite://setBrightness?light=Front&Brightness=75"
 ```
 
-### Szenen steuern
+### Control scenes
 
 Set lights to scene:
 
@@ -206,13 +207,13 @@ Not all models follow these scene names. If your light supports more scenes, you
 
 SceneId Range from 1 ~ 17 depends on light type.
 
-### Fehlerbehandlung
+### error handling
 
-Die URL-Scheme API bietet Logging für:
+The URL Scheme API provides logging for:
 
-- Erfolgreiche Ausführungen (im App-Log sichtbar)
-- Fehler wenn eine Lampe nicht gefunden wird
-- Fehler bei ungültigen Parametern
+- Successful executions (visible in the app log)
+- Error if a lamp is not found
+- Error with invalid parameters
 
 ### Testing
 
