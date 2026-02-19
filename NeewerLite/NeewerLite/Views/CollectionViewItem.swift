@@ -75,6 +75,17 @@ class CollectionViewItem: NSCollectionViewItem, NSTextFieldDelegate, NSTabViewDe
                               action: #selector(renameAction(_:)), keyEquivalent: "")
         item.target = self
         menu.addItem(item)
+
+        // Copy URL deep-link for current light settings
+        item = NSMenuItem(title: NSLocalizedString("Copy API command", comment: ""),
+                          action: #selector(copyApiCommandAction(_:)), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+
+        item = NSMenuItem(title: NSLocalizedString("Copy terminal command", comment: ""),
+                          action: #selector(copyTerminalCommandAction(_:)), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -127,6 +138,114 @@ class CollectionViewItem: NSCollectionViewItem, NSTextFieldDelegate, NSTabViewDe
         location.y += 20
 
         menu.popUp(positioning: menu.item(at: 0), at: location, in: sender)
+    }
+
+    private enum ApiCommandHost: String {
+        case setLightHSI
+        case setLightCCT
+        case setLightScene
+    }
+
+    private func currentLightIdentifierForAPI(_ dev: NeewerLight) -> String {
+        // Match behavior in command execution: userLightName, rawName, identifier
+        let name = dev.userLightName.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            return name
+        }
+        let raw = dev.rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !raw.isEmpty {
+            return raw
+        }
+        let id = dev.identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        return id
+    }
+
+    private func buildAPIURLForCurrentState() -> URL? {
+        guard let dev = self.device else { return nil }
+
+        // Determine which tab is currently active
+        let selected = lightModeTabView.selectedTabViewItem
+        let idf = selected?.identifier as? String
+        let label = selected?.label
+
+        let lightId = currentLightIdentifierForAPI(dev)
+
+        var components = URLComponents()
+        components.scheme = "neewerlite"
+
+        func buildURL(host: ApiCommandHost, queryItems: [URLQueryItem]) -> URL? {
+            components.host = host.rawValue
+            components.queryItems = queryItems
+            return components.url
+        }
+
+        // HSI tab
+        if idf == TabId.hsi.rawValue || label == "HSI" {
+            let val = getHSIValuesFromView()
+            let hue360 = Int((val.hue * 360.0).rounded()).clamped(to: 0...360)
+            let sat100 = Int((val.sat * 100.0).rounded()).clamped(to: 0...100)
+            let brr100 = Int(val.brr.rounded()).clamped(to: 0...100)
+            return buildURL(
+                host: .setLightHSI,
+                queryItems: [
+                    URLQueryItem(name: "light", value: lightId),
+                    URLQueryItem(name: "HUE", value: String(hue360)),
+                    URLQueryItem(name: "Saturation", value: String(sat100)),
+                    URLQueryItem(name: "Brightness", value: String(brr100)),
+                ])
+        }
+
+        // FX tab
+        if idf == TabId.scene.rawValue || label == "FX" {
+            let brr100 = Int(CGFloat(dev.brrValue.value).rounded()).clamped(to: 0...100)
+            let sceneId = Int(dev.channel.value)
+            return buildURL(
+                host: .setLightScene,
+                queryItems: [
+                    URLQueryItem(name: "light", value: lightId),
+                    URLQueryItem(name: "SceneId", value: String(sceneId)),
+                    URLQueryItem(name: "Brightness", value: String(brr100)),
+                ])
+        }
+
+        // Default: CCT / Source tabs
+        let val = getCCTValuesFromView()
+        let cct = Int(val.cct.rounded())
+        let gmm = Int(val.gmm.rounded()).clamped(to: -50...50)
+        let brr100 = Int(val.brr.rounded()).clamped(to: 0...100)
+        return buildURL(
+            host: .setLightCCT,
+            queryItems: [
+                URLQueryItem(name: "light", value: lightId),
+                URLQueryItem(name: "CCT", value: String(cct)),
+                URLQueryItem(name: "GM", value: String(gmm)),
+                URLQueryItem(name: "Brightness", value: String(brr100)),
+            ])
+    }
+
+    @objc func copyApiCommandAction(_ sender: Any) {
+        guard let url = buildAPIURLForCurrentState() else {
+            Logger.warn("Copy API command: no URL (device missing)")
+            return
+        }
+        let urlString = url.absoluteString
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(urlString, forType: .string)
+        Logger.info("Copy API command: \(urlString)")
+    }
+
+    @objc func copyTerminalCommandAction(_ sender: Any) {
+        guard let url = buildAPIURLForCurrentState() else {
+            Logger.warn("Copy terminal command: no URL (device missing)")
+            return
+        }
+        let urlString = url.absoluteString
+        let cmd = "open \"\(urlString)\""
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(cmd, forType: .string)
+        Logger.info("Copy terminal command: \(cmd)")
     }
     
     // Parse newPattern (String) into [String: String]
