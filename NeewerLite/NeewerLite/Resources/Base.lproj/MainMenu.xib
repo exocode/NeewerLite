@@ -24,11 +24,16 @@
                 <outlet property="scanButton" destination="hmi-Hy-1iJ" id="IfU-kt-AmN"/>
                 <outlet property="scanTableView" destination="7EQ-pZ-iT4" id="vSR-Pp-1Ug"/>
                 <outlet property="scanningStatus" destination="Gh9-aB-eda" id="Mbi-B2-EmN"/>
+                <outlet property="settingsInfoLabel" destination="jKf-hO-4bD" id="0oE-qt-Xe5"/>
+                <outlet property="settingsLocalPathLabel" destination="kSa-4g-k2L" id="yyl-2y-4p3"/>
+                <outlet property="settingsModePopup" destination="z0z-Qp-1bC" id="jIw-7I-Ymm"/>
+                <outlet property="settingsURLField" destination="6u1-3B-J7j" id="m2d-Mp-vMP"/>
                 <outlet property="screenImageView" destination="j37-uF-caV" id="9Jc-Fl-eku"/>
                 <outlet property="view0" destination="KE4-Y9-J8y" id="B15-he-A3B"/>
                 <outlet property="view1" destination="SPf-4G-nTF" id="tsm-6P-tlw"/>
                 <outlet property="view2" destination="XLe-ur-ztr" id="yP6-Mh-aNt"/>
                 <outlet property="view3" destination="xrV-r4-7mf" id="dVg-6w-6x8"/>
+                <outlet property="view4" destination="fQq-YP-y5w" id="Q7S-Gn-ZyG"/>
                 <outlet property="viewsButton" destination="9lE-9S-dkf" id="EvC-0b-i2K"/>
                 <outlet property="window" destination="QvC-M9-y7g" id="gIp-Ho-8D9"/>
             </connections>
@@ -727,7 +732,7 @@
                         <size key="minSize" width="75" height="23"/>
                         <size key="maxSize" width="136" height="26"/>
                         <segmentedControl key="view" verticalHuggingPriority="750" id="9lE-9S-dkf">
-                            <rect key="frame" x="0.0" y="14" width="106" height="26"/>
+                            <rect key="frame" x="0.0" y="14" width="170" height="26"/>
                             <autoresizingMask key="autoresizingMask"/>
                             <segmentedCell key="cell" borderStyle="border" alignment="left" style="texturedSquare" trackingMode="selectOne" id="bg6-93-rgd">
                                 <font key="font" metaFont="system"/>
@@ -737,6 +742,8 @@
                                     <segment image="music.quarternote.3" catalog="system" tag="2">
                                         <nil key="label"/>
                                     </segment>
+                                    <segment image="display" catalog="system" tag="3"/>
+                                    <segment image="gearshape" catalog="system" tag="4"/>
                                 </segments>
                             </segmentedCell>
                             <connections>
@@ -1160,10 +1167,118 @@
             </subviews>
             <point key="canvasLocation" x="-393.5" y="398"/>
         </customView>
+        <customView id="fQq-YP-y5w" userLabel="view4">
+            <rect key="frame" x="0.0" y="0.0" width="639" height="424"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+            <subviews>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="G7s-Ym-2o8">
+                    <rect key="frame" x="41" y="383" width="292" height="16"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="clipping" title="Device Database Source" id="m4a-Gk-gEF">
+                        <font key="font" metaFont="systemBold" size="13"/>
+                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <popUpButton verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="z0z-Qp-1bC">
+                    <rect key="frame" x="41" y="347" width="300" height="26"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="border" title="GitHub (Default)" id="k3g-xq-odk">
+                        <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="system"/>
+                        <menu key="menu" title="Menu" id="wJp-Vu-yZc"/>
+                    </popUpButtonCell>
+                    <connections>
+                        <action selector="settingsModeChangedAction:" target="Voe-Tx-rLC" id="JvQ-4x-7xT"/>
+                    </connections>
+                </popUpButton>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="K3l-hY-oG8">
+                    <rect key="frame" x="41" y="313" width="80" height="16"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="clipping" title="Custom URL:" id="L7Z-j4-N5b">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <textField focusRingType="none" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="6u1-3B-J7j">
+                    <rect key="frame" x="41" y="286" width="557" height="22"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="truncatingTail" sendsActionOnEndEditing="YES" title="" editable="YES" selectable="YES" bordered="YES" bezeled="YES" drawsBackground="YES" id="brH-By-f0E">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="p5b-3G-qyK">
+                    <rect key="frame" x="41" y="244" width="88" height="32"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="push" title="Apply" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="6tG-0t-c5g">
+                        <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="settingsApplyAction:" target="Voe-Tx-rLC" id="y5w-k6-uqM"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="XWZ-e1-8pZ">
+                    <rect key="frame" x="137" y="244" width="150" height="32"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="push" title="Reset to Default" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="Y7q-0r-5Vq">
+                        <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="settingsResetToDefaultAction:" target="Voe-Tx-rLC" id="KpP-IR-0EZ"/>
+                    </connections>
+                </button>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="jKf-hO-4bD">
+                    <rect key="frame" x="41" y="214" width="557" height="16"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="truncatingTail" title="" id="L1H-pV-zcX">
+                        <font key="font" metaFont="smallSystem"/>
+                        <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="o0t-8c-f1s">
+                    <rect key="frame" x="41" y="171" width="140" height="16"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="clipping" title="Local cache file:" id="dXN-IG-6qN">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="kSa-4g-k2L">
+                    <rect key="frame" x="41" y="144" width="557" height="16"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="truncatingMiddle" title="" id="O6K-iQ-C0F">
+                        <font key="font" metaFont="smallSystem"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="uXQ-pV-2fW">
+                    <rect key="frame" x="41" y="109" width="140" height="32"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="push" title="Show in Finder" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="4rO-cd-1mF">
+                        <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="settingsRevealLocalDatabaseAction:" target="Voe-Tx-rLC" id="b5B-bH-BRw"/>
+                    </connections>
+                </button>
+            </subviews>
+            <point key="canvasLocation" x="-126" y="570"/>
+        </customView>
         <customObject id="uGS-Fn-ONr" customClass="MySplitViewDelegate" customModule="NeewerLite" customModuleProvider="target"/>
     </objects>
     <resources>
         <image name="NSBluetoothTemplate" width="16" height="21"/>
+        <image name="display" catalog="system" width="17" height="13"/>
+        <image name="gearshape" catalog="system" width="17" height="17"/>
         <image name="music.quarternote.3" catalog="system" width="18" height="15"/>
         <image name="square.split.2x2" catalog="system" width="15" height="14"/>
     </resources>

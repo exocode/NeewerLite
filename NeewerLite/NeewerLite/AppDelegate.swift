@@ -39,6 +39,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     @IBOutlet var view1: NSView!
     @IBOutlet var view2: NSView!
     @IBOutlet var view3: NSView!
+    @IBOutlet var view4: NSView!
+
+    // MARK: - Settings View Outlets
+
+    @IBOutlet weak var settingsModePopup: NSPopUpButton!
+    @IBOutlet weak var settingsURLField: NSTextField!
+    @IBOutlet weak var settingsLocalPathLabel: NSTextField!
+    @IBOutlet weak var settingsInfoLabel: NSTextField!
     var audioSpectrogramViewVisible: Bool = false
 
     private var statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -201,6 +209,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         )
         ContentManager.shared.loadDatabaseFromDisk()
         ContentManager.shared.downloadDatabase(force: false)
+
+        refreshSettingsUIFromPreferences()
 
         loadLightsFromDisk()
         self.updateUI()
@@ -787,6 +797,132 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         ContentManager.shared.downloadDatabase(force: true)
     }
 
+    // MARK: - Settings
+
+    private enum SettingsModeIndex: Int {
+        case githubDefault = 0
+        case customURL = 1
+        case disabled = 2
+    }
+
+    private func settingsModeIndex(from mode: DatabaseFetchMode) -> SettingsModeIndex {
+        switch mode {
+        case .githubDefault:
+            return .githubDefault
+        case .customURL:
+            return .customURL
+        case .disabled:
+            return .disabled
+        }
+    }
+
+    private func databaseFetchMode(from index: SettingsModeIndex) -> DatabaseFetchMode {
+        switch index {
+        case .githubDefault:
+            return .githubDefault
+        case .customURL:
+            return .customURL
+        case .disabled:
+            return .disabled
+        }
+    }
+
+    private func refreshSettingsUIFromPreferences() {
+        guard settingsModePopup != nil,
+            settingsURLField != nil,
+            settingsLocalPathLabel != nil,
+            settingsInfoLabel != nil
+        else {
+            return
+        }
+
+        // Ensure the popup items are always in sync (XIB may contain a placeholder item)
+        settingsModePopup.removeAllItems()
+        settingsModePopup.addItems(withTitles: [
+            "GitHub (Default)",
+            "Custom URL",
+            "Local Only (Disable Fetching)",
+        ])
+
+        let mode = ContentManager.shared.databaseFetchMode
+        settingsModePopup.selectItem(at: settingsModeIndex(from: mode).rawValue)
+        settingsURLField.stringValue = ContentManager.shared.customDatabaseURLString
+        settingsLocalPathLabel.stringValue = ContentManager.shared.localDatabaseFileURLForUser.path
+
+        updateSettingsUIEnabledState()
+        updateSettingsInfoLabel()
+    }
+
+    private func updateSettingsUIEnabledState() {
+        let modeIndex = SettingsModeIndex(rawValue: settingsModePopup.indexOfSelectedItem)
+            ?? .githubDefault
+        let mode = databaseFetchMode(from: modeIndex)
+        settingsURLField.isEnabled = (mode == .customURL)
+    }
+
+    private func updateSettingsInfoLabel() {
+        let modeIndex = SettingsModeIndex(rawValue: settingsModePopup.indexOfSelectedItem)
+            ?? .githubDefault
+        let mode = databaseFetchMode(from: modeIndex)
+
+        switch mode {
+        case .githubDefault:
+            settingsInfoLabel.stringValue =
+                "Reads local cache first, then fetches from the default GitHub URL."
+        case .customURL:
+            settingsInfoLabel.stringValue =
+                "Reads local cache first, then fetches from your custom URL."
+        case .disabled:
+            settingsInfoLabel.stringValue =
+                "Local-only mode: the database will never be fetched from a URL (including manual sync)."
+        }
+    }
+
+    @IBAction func settingsModeChangedAction(_ sender: NSPopUpButton) {
+        updateSettingsUIEnabledState()
+        updateSettingsInfoLabel()
+    }
+
+    @IBAction func settingsApplyAction(_ sender: Any) {
+        let modeIndex = SettingsModeIndex(rawValue: settingsModePopup.indexOfSelectedItem)
+            ?? .githubDefault
+        let mode = databaseFetchMode(from: modeIndex)
+
+        if mode == .customURL {
+            let s = settingsURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: s), url.scheme != nil else {
+                let alert = NSAlert()
+                alert.messageText = "Invalid URL"
+                alert.informativeText = "Please enter a valid URL (including https://)."
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+                return
+            }
+            ContentManager.shared.setCustomDatabaseURLString(url.absoluteString)
+        }
+
+        ContentManager.shared.setDatabaseFetchMode(mode)
+        refreshSettingsUIFromPreferences()
+
+        let alert = NSAlert()
+        alert.messageText = "Saved"
+        alert.informativeText = "Settings have been saved."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @IBAction func settingsResetToDefaultAction(_ sender: Any) {
+        ContentManager.shared.setDatabaseFetchMode(.githubDefault)
+        ContentManager.shared.setCustomDatabaseURLString(ContentManager.defaultDatabaseURLString)
+        refreshSettingsUIFromPreferences()
+    }
+
+    @IBAction func settingsRevealLocalDatabaseAction(_ sender: Any) {
+        ContentManager.shared.revealLocalDatabaseInFinder()
+    }
+
     @IBAction func toggleScreenDriver(_ sender: NSSwitch) {
         if sender.state == .on {
 
@@ -880,7 +1016,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         for subview in contentView.subviews {
             subview.removeFromSuperview()
         }
-        let views = [self.view0, self.view1, self.view2, self.view3]
+        let views = [self.view0, self.view1, self.view2, self.view3, self.view4]
         if sender.selectedSegment >= 0 && sender.selectedSegment < views.count {
 
             UserDefaults.standard.setValue(sender.selectedSegment, forKey: "viewIdx")
@@ -907,6 +1043,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                     if !launching {
                         Logger.info(LogTag.click, "Screen View")
                     }
+                } else if selectedView == self.view4 {
+                    window.title = "NeewerLite - Settings"
+                    if !launching {
+                        Logger.info(LogTag.click, "Settings View")
+                    }
+                    refreshSettingsUIFromPreferences()
                 }
                 selectedView.frame = contentView.bounds
                 selectedView.autoresizingMask = [.width, .height]

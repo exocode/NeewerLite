@@ -10,6 +10,15 @@ import Foundation
 
 private let supportedVersion: Double = 3.0
 
+enum DatabaseFetchMode: String, CaseIterable {
+    /// Default behavior: read local cache first and then periodically fetch from the GitHub URL.
+    case githubDefault
+    /// Read local cache first and then fetch from the user-defined URL.
+    case customURL
+    /// Local-only testing: never fetch from any remote URL (even manual sync).
+    case disabled
+}
+
 class ImageFetchOperation: Operation {
     var lightType: UInt8
     var completionHandler: ((NSImage?) -> Void)?
@@ -103,6 +112,13 @@ class ContentManager {
 
     static let shared = ContentManager()
 
+    // MARK: - Preferences
+
+    static let databaseFetchModeKey = "databaseFetchMode"
+    static let customDatabaseURLKey = "customDatabaseURL"
+    static let defaultDatabaseURLString =
+        "https://raw.githubusercontent.com/keefo/NeewerLite/main/Database/lights.json"
+
     private let fileManager = FileManager.default
     private let session = URLSession(configuration: .default)
     private var failedURLs = Set<URL>()
@@ -129,8 +145,7 @@ class ContentManager {
     }()
 
     // JSON Database URL
-    private let jsonDatabaseURL = URL(
-        string: "https://raw.githubusercontent.com/keefo/NeewerLite/main/Database/lights.json")!
+    private let defaultDatabaseURL = URL(string: ContentManager.defaultDatabaseURLString)!
     private var localDatabaseURL: URL {
         let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first!
@@ -149,6 +164,10 @@ class ContentManager {
     }
 
     private init() {
+        // Restore last checked date from preferences
+        if let restored = UserDefaults.standard.object(forKey: "lastCheckedDate") as? Date {
+            lastCheckedDate = restored
+        }
         operationQueue = OperationQueue()
         operationQueue.maxConcurrentOperationCount = 10  // Adjust this as needed
         ttlTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
@@ -158,6 +177,9 @@ class ContentManager {
     }
 
     private func checkTTL() {
+        guard databaseFetchMode != .disabled else {
+            return
+        }
         guard let remaining = remainingTTL else { return }
         NotificationCenter.default.post(
             name: ContentManager.databaseUpdatedCountdownNotification, object: nil,
@@ -218,6 +240,22 @@ class ContentManager {
     }
 
     public func downloadDatabase(force: Bool) {
+        if databaseFetchMode == .disabled {
+            Logger.info("Database fetching disabled — skipping download.")
+            if force {
+                Task { @MainActor in
+                    let alert = NSAlert()
+                    alert.messageText = "Database Fetching Disabled"
+                    alert.informativeText =
+                        "Fetching the device database from a URL is disabled in Settings."
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+            return
+        }
+
         if !force && !self.shouldDownloadDatabase() {
             return
         }
@@ -244,8 +282,14 @@ class ContentManager {
     private func downloadDatabaseNow() async throws {
         lastCheckedDate = Date()
         do {
-            Logger.info("Download database...")
-            let (data, _) = try await session.data(from: jsonDatabaseURL)
+            guard let remoteURL = selectedRemoteDatabaseURL else {
+                throw NSError(
+                    domain: "DatabaseURL",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "No valid remote database URL configured."])
+            }
+            Logger.info("Download database from \(remoteURL.absoluteString)...")
+            let (data, _) = try await session.data(from: remoteURL)
             Logger.info("Download content: \(String(data: data, encoding: .utf8) ?? "<binary>")")
             try data.write(to: localDatabaseURL)
             loadDatabaseFromDisk(reload: true)
@@ -265,6 +309,10 @@ class ContentManager {
     }
 
     private func shouldDownloadDatabase() -> Bool {
+        if databaseFetchMode == .disabled {
+            return false
+        }
+
         // Check if the local file exists and is valid
         if !fileManager.fileExists(atPath: localDatabaseURL.path) {
             return true
@@ -282,6 +330,52 @@ class ContentManager {
             return false
         }
         return true
+    }
+
+    // MARK: - Public Preferences API
+
+    public var databaseFetchMode: DatabaseFetchMode {
+        let raw = UserDefaults.standard.string(forKey: Self.databaseFetchModeKey)
+        return DatabaseFetchMode(rawValue: raw ?? "") ?? .githubDefault
+    }
+
+    public func setDatabaseFetchMode(_ mode: DatabaseFetchMode) {
+        UserDefaults.standard.setValue(mode.rawValue, forKey: Self.databaseFetchModeKey)
+    }
+
+    public var customDatabaseURLString: String {
+        UserDefaults.standard.string(forKey: Self.customDatabaseURLKey)
+            ?? Self.defaultDatabaseURLString
+    }
+
+    public func setCustomDatabaseURLString(_ urlString: String) {
+        UserDefaults.standard.setValue(urlString, forKey: Self.customDatabaseURLKey)
+    }
+
+    public var localDatabaseFileURLForUser: URL {
+        localDatabaseURL
+    }
+
+    public func revealLocalDatabaseInFinder() {
+        let fileURL = localDatabaseFileURLForUser
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+    }
+
+    // MARK: - URL Selection
+
+    private var selectedRemoteDatabaseURL: URL? {
+        switch databaseFetchMode {
+        case .disabled:
+            return nil
+        case .githubDefault:
+            return defaultDatabaseURL
+        case .customURL:
+            let s = customDatabaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: s), url.scheme != nil else {
+                return nil
+            }
+            return url
+        }
     }
 
     // MARK: - Image Fetching and Caching
