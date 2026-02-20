@@ -737,8 +737,9 @@
                             <segmentedCell key="cell" borderStyle="border" alignment="left" style="texturedSquare" trackingMode="selectOne" id="bg6-93-rgd">
                                 <font key="font" metaFont="system"/>
                                 <segments>
-                                    <segment image="NSBluetoothTemplate" width="32"/>
-                                    <segment image="square.split.2x2" catalog="system" width="32" selected="YES" tag="1"/>
+                                    <!-- Order: Control, Bluetooth, Music, Monitor, Settings -->
+                                    <segment image="square.split.2x2" catalog="system" width="32" selected="YES" tag="0"/>
+                                    <segment image="NSBluetoothTemplate" width="32" tag="1"/>
                                     <segment image="music.quarternote.3" catalog="system" tag="2">
                                         <nil key="label"/>
                                     </segment>

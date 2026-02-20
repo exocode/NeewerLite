@@ -172,8 +172,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         Logger.info(LogTag.app, "App launch")
 
         scanningStatus?.stringValue = ""
-        let idx = UserDefaults.standard.value(forKey: "viewIdx") as? Int
-        self.viewsButton.selectSegment(withTag: idx ?? 0)
+        // Default to the first segment (Control View)
+        let idx = (UserDefaults.standard.value(forKey: "viewIdx") as? Int) ?? 0
+        self.viewsButton.selectSegment(withTag: idx)
 
         appMenu.delegate = self
         self.statusItem.menu = appMenu
@@ -429,7 +430,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                 type: .scanLight,
                 action: { _ in
                     // from open command neewerlite://scanLight
-                    self.viewsButton.selectSegment(withTag: 0)
+                    // Bluetooth View
+                    self.viewsButton.selectSegment(withTag: 1)
                     self.switchViewAction(self.viewsButton)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         self.forceScanAction(self.scanButton)
@@ -1016,22 +1018,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
         for subview in contentView.subviews {
             subview.removeFromSuperview()
         }
-        let views = [self.view0, self.view1, self.view2, self.view3, self.view4]
+        // View order (toolbar segments):
+        // 0 Control, 1 Bluetooth, 2 Music, 3 Monitor, 4 Settings
+        let views = [self.view1, self.view0, self.view2, self.view3, self.view4]
         if sender.selectedSegment >= 0 && sender.selectedSegment < views.count {
 
             UserDefaults.standard.setValue(sender.selectedSegment, forKey: "viewIdx")
 
             if let selectedView = views[sender.selectedSegment] {
                 self.audioSpectrogramViewVisible = false
-                if selectedView == self.view0 {
-                    window.title = "NeewerLite - Scan View"
-                    if !launching {
-                        Logger.info(LogTag.click, "Scan View")
-                    }
-                } else if selectedView == self.view1 {
+                if selectedView == self.view1 {
                     window.title = "NeewerLite - Control View"
                     if !launching {
                         Logger.info(LogTag.click, "Control View")
+                    }
+                } else if selectedView == self.view0 {
+                    window.title = "NeewerLite - Bluetooth"
+                    if !launching {
+                        Logger.info(LogTag.click, "Bluetooth View")
                     }
                 } else if selectedView == self.view2 {
                     window.title = "NeewerLite - Music View"
@@ -1039,9 +1043,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                         Logger.info(LogTag.click, "Music View")
                     }
                 } else if selectedView == self.view3 {
-                    window.title = "NeewerLite - Screen View"
+                    window.title = "NeewerLite - Monitor"
                     if !launching {
-                        Logger.info(LogTag.click, "Screen View")
+                        Logger.info(LogTag.click, "Monitor View")
                     }
                 } else if selectedView == self.view4 {
                     window.title = "NeewerLite - Settings"
