@@ -455,6 +455,22 @@ final class CommandTypeTests: XCTestCase {
         XCTAssertEqual(CommandType.listLights.description, "listLights", "listLights description sollte korrekt sein")
     }
 
+    func testBrightnessDeltaCommand() {
+        XCTAssertEqual(CommandType.brightnessDelta.description, "brightnessDelta")
+    }
+
+    func testTemperatureDeltaCommand() {
+        XCTAssertEqual(CommandType.temperatureDelta.description, "temperatureDelta")
+    }
+
+    func testHueDeltaCommand() {
+        XCTAssertEqual(CommandType.hueDelta.description, "hueDelta")
+    }
+
+    func testSatDeltaCommand() {
+        XCTAssertEqual(CommandType.satDelta.description, "satDelta")
+    }
+
     // MARK: - Existing CommandType Tests
 
     func testTurnOnLightCommand() {
@@ -483,5 +499,31 @@ final class CommandTypeTests: XCTestCase {
 
     func testSetLightSceneCommand() {
         XCTAssertEqual(CommandType.setLightScene.description, "setLightScene", "setLightScene description sollte korrekt sein")
+    }
+}
+
+// MARK: - Delta parameter parsing
+
+final class DeltaParameterTests: XCTestCase {
+
+    func testDeltaParsingPositive() {
+        let url = URL(string: "neewerlite://brightnessDelta?light=left&delta=15")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+        XCTAssertEqual(param.delta(), 15)
+    }
+
+    func testDeltaParsingNegative() {
+        let url = URL(string: "neewerlite://brightnessDelta?light=left&delta=-7.5")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+        XCTAssertEqual(param.delta(), -7.5)
+    }
+
+    func testDeltaMissing() {
+        let url = URL(string: "neewerlite://brightnessDelta?light=left")!
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let param = CommandParameter(components: components)
+        XCTAssertNil(param.delta())
     }
 }

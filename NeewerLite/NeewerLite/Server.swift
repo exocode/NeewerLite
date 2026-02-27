@@ -200,6 +200,42 @@ final class NeewerLiteServer {
             return HttpResponse.ok(.json(["success": true, "switched": payload.lights]))
         }
 
+        // URL-scheme-like endpoints for HTTP clients.
+        // These accept `?light=...` with wildcard/pattern support (e.g. NEEWER-*), just like the URL scheme.
+        server.POST["/turnOnLight"] = { request in
+            let targets = resolveTargetLights(request: request, bodyLights: nil)
+            for viewObj in targets {
+                Task { @MainActor in
+                    if !viewObj.isON {
+                        viewObj.turnOnLight()
+                    }
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
+
+        server.POST["/turnOffLight"] = { request in
+            let targets = resolveTargetLights(request: request, bodyLights: nil)
+            for viewObj in targets {
+                Task { @MainActor in
+                    if viewObj.isON {
+                        viewObj.turnOffLight()
+                    }
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
+
+        server.POST["/toggleLight"] = { request in
+            let targets = resolveTargetLights(request: request, bodyLights: nil)
+            for viewObj in targets {
+                Task { @MainActor in
+                    viewObj.toggleLight()
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
+
         server.POST["/brightness"] = { request in
             let data = Data(request.body)
             struct BrightnessPayload: Codable {

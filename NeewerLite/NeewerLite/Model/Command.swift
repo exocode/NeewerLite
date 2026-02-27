@@ -23,6 +23,10 @@ enum CommandType {
     case setTemperature
     case setHue
     case setSaturation
+    case brightnessDelta
+    case temperatureDelta
+    case hueDelta
+    case satDelta
     case listLights
 
     var description: String {
@@ -49,6 +53,14 @@ enum CommandType {
                 return "setHue"
             case .setSaturation:
                 return "setSaturation"
+            case .brightnessDelta:
+                return "brightnessDelta"
+            case .temperatureDelta:
+                return "temperatureDelta"
+            case .hueDelta:
+                return "hueDelta"
+            case .satDelta:
+                return "satDelta"
             case .listLights:
                 return "listLights"
         }
@@ -147,6 +159,16 @@ struct CommandParameter {
             if let brr = Double(val) {
                 return brr
             }
+        }
+        return nil
+    }
+
+    /// Generic delta parameter used by relative adjustment commands.
+    /// Accepts `delta` (preferred) and `Delta`.
+    func delta() -> Double? {
+        guard let items = components.queryItems else { return nil }
+        if let v = items.first(where: { $0.name.lowercased() == "delta" })?.value {
+            return Double(v)
         }
         return nil
     }

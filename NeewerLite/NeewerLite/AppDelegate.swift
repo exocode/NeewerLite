@@ -425,6 +425,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
     }
 
     func registerCommands() {
+        func wrapHue360(_ value: Double) -> Double {
+            // Wrap into [0, 360) (360 becomes 0)
+            let m = value.truncatingRemainder(dividingBy: 360.0)
+            return m >= 0 ? m : (m + 360.0)
+        }
+
         commandHandler.register(
             command: Command(
                 type: .scanLight,
@@ -688,6 +694,124 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDele
                                 }
                             } else {
                                 Logger.warn("  - Light does not support RGB: \(viewObj.device.userLightName.value)")
+                            }
+                        }
+                    }
+                }))
+
+        // MARK: - Delta (relative) commands
+
+        commandHandler.register(
+            command: Command(
+                type: .brightnessDelta,
+                action: { cmdParameter in
+                    guard let delta = cmdParameter.delta() else {
+                        Logger.error("brightnessDelta: Missing delta parameter")
+                        return
+                    }
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("brightnessDelta: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("brightnessDelta: Applying delta=\(delta) to \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Task { @MainActor in
+                                let current = Double(viewObj.device.brrValue.value)
+                                let next = (current + delta).clamped(to: 0...100)
+                                viewObj.device.setBRR100LightValues(CGFloat(next))
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .temperatureDelta,
+                action: { cmdParameter in
+                    guard let delta = cmdParameter.delta() else {
+                        Logger.error("temperatureDelta: Missing delta parameter")
+                        return
+                    }
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("temperatureDelta: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("temperatureDelta: Applying delta=\(delta) to \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            Task { @MainActor in
+                                let range = viewObj.device.CCTRange()
+                                let current = Double(viewObj.device.cctValue.value)
+                                let next = (current + delta).clamped(to: Double(range.minCCT)...Double(range.maxCCT))
+                                viewObj.changeToCCTMode()
+                                viewObj.device.setCCTLightValues(
+                                    brr: CGFloat(viewObj.device.brrValue.value),
+                                    cct: CGFloat(next),
+                                    gmm: CGFloat(viewObj.device.gmmValue.value)
+                                )
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .hueDelta,
+                action: { cmdParameter in
+                    guard let delta = cmdParameter.delta() else {
+                        Logger.error("hueDelta: Missing delta parameter")
+                        return
+                    }
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("hueDelta: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("hueDelta: Applying delta=\(delta) to \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            guard viewObj.device.supportRGB else {
+                                Logger.warn("hueDelta: Light does not support RGB: \(viewObj.device.userLightName.value)")
+                                return
+                            }
+                            Task { @MainActor in
+                                viewObj.changeToHSIMode()
+                                let currentHue = Double(viewObj.device.hueValue.value)
+                                let nextHue = wrapHue360(currentHue + delta)
+                                let satUnit = CGFloat(viewObj.device.satValue.value) / 100.0
+                                let brrPercent = Double(viewObj.device.brrValue.value)
+                                viewObj.updateHSI(hue: CGFloat(nextHue), sat: satUnit, brr: brrPercent)
+                            }
+                        }
+                    }
+                }))
+
+        commandHandler.register(
+            command: Command(
+                type: .satDelta,
+                action: { cmdParameter in
+                    guard let delta = cmdParameter.delta() else {
+                        Logger.error("satDelta: Missing delta parameter")
+                        return
+                    }
+
+                    let matchedLights = self.findMatchingLights(cmdParameter: cmdParameter)
+                    if matchedLights.isEmpty {
+                        Logger.warn("satDelta: No lights found for '\(cmdParameter.lightName() ?? "all")'")
+                    } else {
+                        Logger.info("satDelta: Applying delta=\(delta) to \(matchedLights.count) light(s)")
+                        matchedLights.forEach { viewObj in
+                            guard viewObj.device.supportRGB else {
+                                Logger.warn("satDelta: Light does not support RGB: \(viewObj.device.userLightName.value)")
+                                return
+                            }
+                            Task { @MainActor in
+                                viewObj.changeToHSIMode()
+                                let currentSat100 = Double(viewObj.device.satValue.value)
+                                let nextSat100 = (currentSat100 + delta).clamped(to: 0...100)
+                                let satUnit = CGFloat(nextSat100) / 100.0
+                                let brrPercent = Double(viewObj.device.brrValue.value)
+                                viewObj.updateHSI(hue: CGFloat(viewObj.device.hueValue.value), sat: satUnit, brr: brrPercent)
                             }
                         }
                     }
