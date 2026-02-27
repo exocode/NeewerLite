@@ -11,6 +11,14 @@ extension DeviceViewObject {
             || device.rawName.lowercased()          == lower
             || device.identifier.lowercased()       == lower
     }
+
+    /// Matches a prefix (wildcard selector like "NEEWER-*") against userLightName, rawName, or identifier (case-insensitive)
+    func matches(prefix: String) -> Bool {
+        let p = prefix.lowercased()
+        return device.userLightName.value.lowercased().hasPrefix(p)
+            || device.rawName.lowercased().hasPrefix(p)
+            || device.identifier.lowercased().hasPrefix(p)
+    }
 }
 
 final class NeewerLiteServer {
@@ -31,6 +39,77 @@ final class NeewerLiteServer {
     
     /// Configure HTTP routes
     private func setupRoutes() {
+
+        func queryValue(_ request: HttpRequest, _ key: String) -> String? {
+            // Swifter exposes query string as `queryParams`.
+            // Note: This is distinct from headers and body.
+            return request.queryParams.first(where: { $0.0 == key })?.1
+        }
+
+        func parseLightSelector(_ lightParam: String) -> (exact: [String], wildcardPrefixes: [String]) {
+            // Supports: "Front,Back" and wildcard: "NEEWER-*" and combined: "Front*,Back,NEEWER-*"
+            let parts = lightParam
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            var exact: [String] = []
+            var wildcardPrefixes: [String] = []
+
+            for p in parts {
+                if p.hasSuffix("*") {
+                    wildcardPrefixes.append(String(p.dropLast()))
+                } else {
+                    exact.append(p)
+                }
+            }
+            return (exact, wildcardPrefixes)
+        }
+
+        func resolveTargetLights(request: HttpRequest, bodyLights: [String]?) -> [DeviceViewObject] {
+            guard let viewObjects = self.appDelegate?.viewObjects else { return [] }
+
+            // Priority:
+            // 1) `lights` field in JSON body (existing style)
+            // 2) `?light=...` query (supports wildcard)
+            // 3) if none specified -> all lights
+            if let bodyLights, !bodyLights.isEmpty {
+                // bodyLights may also contain wildcard items like "NEEWER-*".
+                var matched: [DeviceViewObject] = []
+                for token in bodyLights {
+                    let sel = parseLightSelector(token)
+                    for vo in viewObjects {
+                        if sel.exact.contains(where: { vo.matches(lightId: $0) }) {
+                            if !matched.contains(where: { $0 === vo }) { matched.append(vo) }
+                        } else if sel.wildcardPrefixes.contains(where: { vo.matches(prefix: $0) }) {
+                            if !matched.contains(where: { $0 === vo }) { matched.append(vo) }
+                        }
+                    }
+                }
+                return matched
+            }
+
+            if let lightParam = queryValue(request, "light"), !lightParam.isEmpty {
+                let sel = parseLightSelector(lightParam)
+                return viewObjects.filter { vo in
+                    sel.exact.contains(where: { vo.matches(lightId: $0) })
+                        || sel.wildcardPrefixes.contains(where: { vo.matches(prefix: $0) })
+                }
+            }
+
+            return viewObjects
+        }
+
+        func parseDeltaFromQuery(_ request: HttpRequest) -> CGFloat? {
+            guard let s = queryValue(request, "delta") else { return nil }
+            return Double(s).map { CGFloat($0) }
+        }
+
+        func wrapHue360(_ value: Double) -> Double {
+            // Wrap into [0, 360) (360 becomes 0)
+            let m = value.truncatingRemainder(dividingBy: 360.0)
+            return m >= 0 ? m : (m + 360.0)
+        }
         
         server.middleware.append { request in
             guard let ua = request.headers["user-agent"] else {
@@ -148,6 +227,41 @@ final class NeewerLiteServer {
             // Respond with success and echoed list
             return HttpResponse.ok(.json(["success": true, "switched": payload.lights]))
         }
+
+        // POST /brightnessDelta
+        // Body JSON: { "lights": ["Front", "NEEWER-*"]?, "delta": 5 }
+        // Or query:  /brightnessDelta?light=NEEWER-*&delta=5
+        server.POST["/brightnessDelta"] = { request in
+            let data = Data(request.body)
+            struct BrightnessDeltaPayload: Codable {
+                let lights: [String]?
+                let delta: CGFloat
+            }
+
+            var bodyLights: [String]? = nil
+            var delta: CGFloat? = nil
+
+            if !data.isEmpty, let payload = try? JSONDecoder().decode(BrightnessDeltaPayload.self, from: data) {
+                bodyLights = payload.lights
+                delta = payload.delta
+            } else {
+                delta = parseDeltaFromQuery(request)
+            }
+
+            guard let delta else {
+                return HttpResponse.badRequest(.json(["error": "missing delta"]))
+            }
+
+            let targets = resolveTargetLights(request: request, bodyLights: bodyLights)
+            for viewObj in targets {
+                Task { @MainActor in
+                    let current = CGFloat(viewObj.device.brrValue.value)
+                    let next = (current + delta).clamped(to: 0...100)
+                    viewObj.device.setBRR100LightValues(next)
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
         
         server.POST["/temperature"] = { request in
             let data = Data(request.body)
@@ -168,13 +282,54 @@ final class NeewerLiteServer {
                 self.appDelegate?.viewObjects
                     .filter { $0.matches(lightId: light) }
                     .forEach { viewObj in
-                       Task { @MainActor in
+                        Task { @MainActor in
                             viewObj.device.setCCTLightValues(brr: CGFloat(viewObj.device.brrValue.value), cct: CGFloat(payload.temperature), gmm: CGFloat(viewObj.device.gmmValue.value))
                         }
                     }
             }
             // Respond with success and echoed list
             return HttpResponse.ok(.json(["success": true, "switched": payload.lights]))
+        }
+
+        // POST /temperatureDelta
+        // Body JSON: { "lights": ["Front", "NEEWER-*"]?, "delta": 100 }
+        // Or query:  /temperatureDelta?light=NEEWER-*&delta=100
+        server.POST["/temperatureDelta"] = { request in
+            let data = Data(request.body)
+            struct TemperatureDeltaPayload: Codable {
+                let lights: [String]?
+                let delta: CGFloat
+            }
+
+            var bodyLights: [String]? = nil
+            var delta: CGFloat? = nil
+
+            if !data.isEmpty, let payload = try? JSONDecoder().decode(TemperatureDeltaPayload.self, from: data) {
+                bodyLights = payload.lights
+                delta = payload.delta
+            } else {
+                delta = parseDeltaFromQuery(request)
+            }
+
+            guard let delta else {
+                return HttpResponse.badRequest(.json(["error": "missing delta"]))
+            }
+
+            let targets = resolveTargetLights(request: request, bodyLights: bodyLights)
+            for viewObj in targets {
+                Task { @MainActor in
+                    let current = CGFloat(viewObj.device.cctValue.value)
+                    let range = viewObj.device.CCTRange()
+                    let next = (current + delta).clamped(to: CGFloat(range.minCCT)...CGFloat(range.maxCCT))
+                    viewObj.changeToCCTMode()
+                    viewObj.device.setCCTLightValues(
+                        brr: CGFloat(viewObj.device.brrValue.value),
+                        cct: next,
+                        gmm: CGFloat(viewObj.device.gmmValue.value)
+                    )
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
         }
 
         server.POST["/cct"] = { request in
@@ -270,6 +425,47 @@ final class NeewerLiteServer {
             // Respond with success and echoed list
             return HttpResponse.ok(.json(["success": true, "switched": payload.lights]))
         }
+
+        // POST /hueDelta
+        // Body JSON: { "lights": ["Front", "NEEWER-*"]?, "delta": 10 }
+        // Or query:  /hueDelta?light=NEEWER-*&delta=10
+        // Hue wraps around (e.g., 359 + 10 -> 9)
+        server.POST["/hueDelta"] = { request in
+            let data = Data(request.body)
+            struct HueDeltaPayload: Codable {
+                let lights: [String]?
+                let delta: CGFloat
+            }
+
+            var bodyLights: [String]? = nil
+            var delta: CGFloat? = nil
+
+            if !data.isEmpty, let payload = try? JSONDecoder().decode(HueDeltaPayload.self, from: data) {
+                bodyLights = payload.lights
+                delta = payload.delta
+            } else {
+                delta = parseDeltaFromQuery(request)
+            }
+
+            guard let delta else {
+                return HttpResponse.badRequest(.json(["error": "missing delta"]))
+            }
+
+            let targets = resolveTargetLights(request: request, bodyLights: bodyLights)
+                .filter { $0.device.supportRGB }
+
+            for viewObj in targets {
+                Task { @MainActor in
+                    viewObj.changeToHSIMode()
+                    let currentHue = Double(viewObj.device.hueValue.value)
+                    let nextHue = wrapHue360(currentHue + Double(delta))
+                    let satUnit = CGFloat(viewObj.device.satValue.value) / 100.0
+                    let brrPercent = Double(viewObj.device.brrValue.value)
+                    viewObj.updateHSI(hue: CGFloat(nextHue), sat: satUnit, brr: brrPercent)
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
         
         server.POST["/sat"] = { request in
             let data = Data(request.body)
@@ -301,6 +497,46 @@ final class NeewerLiteServer {
             // Respond with success and echoed list
             return HttpResponse.ok(.json(["success": true, "switched": payload.lights]))
         }
+
+        // POST /satDelta
+        // Body JSON: { "lights": ["Front", "NEEWER-*"]?, "delta": 5 }
+        // Or query:  /satDelta?light=NEEWER-*&delta=5
+        server.POST["/satDelta"] = { request in
+            let data = Data(request.body)
+            struct SatDeltaPayload: Codable {
+                let lights: [String]?
+                let delta: CGFloat
+            }
+
+            var bodyLights: [String]? = nil
+            var delta: CGFloat? = nil
+
+            if !data.isEmpty, let payload = try? JSONDecoder().decode(SatDeltaPayload.self, from: data) {
+                bodyLights = payload.lights
+                delta = payload.delta
+            } else {
+                delta = parseDeltaFromQuery(request)
+            }
+
+            guard let delta else {
+                return HttpResponse.badRequest(.json(["error": "missing delta"]))
+            }
+
+            let targets = resolveTargetLights(request: request, bodyLights: bodyLights)
+                .filter { $0.device.supportRGB }
+
+            for viewObj in targets {
+                Task { @MainActor in
+                    viewObj.changeToHSIMode()
+                    let currentSat = CGFloat(viewObj.device.satValue.value)
+                    let nextSat100 = (currentSat + delta).clamped(to: 0...100)
+                    let satUnit = nextSat100 / 100.0
+                    let brrPercent = Double(viewObj.device.brrValue.value)
+                    viewObj.updateHSI(hue: CGFloat(viewObj.device.hueValue.value), sat: satUnit, brr: brrPercent)
+                }
+            }
+            return HttpResponse.ok(.json(["success": true, "matched": targets.count]))
+        }
         
         server.POST["/fx"] = { request in
             let data = Data(request.body)
@@ -322,7 +558,7 @@ final class NeewerLiteServer {
                 self.appDelegate?.viewObjects
                     .filter { $0.matches(lightId: light) }
                     .forEach { viewObj in
-                         if viewObj.device.maxChannel == 9 {
+                        if viewObj.device.maxChannel == 9 {
                             if payload.fx9 > 0 && payload.fx9 <= viewObj.device.maxChannel {
                                 Task { @MainActor in
                                     viewObj.changeToSCEMode()
